@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PulseGrid GeoLive | Real-Time Event & Mobile Vendor Radar</title>
+  
+  <!-- Tailwind CSS & Lucide Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- Leaflet CSS & JS for high-performance interactive mapping with CartoDB Voyager/Dark tiles -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- Leaflet Heatmap Plugin for Pro Heatmaps -->
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+
+  <!-- Google Font: Inter & Space Grotesk -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Space Grotesk', 'sans-serif']
+          },
+          colors: {
+            brand: {
+              50: '#eefdf6',
+              500: '#10b981',
+              600: '#059669',
+              gold: '#f59e0b',
+              neon: '#06b6d4',
+              surface: '#0f172a',
+              card: '#1e293b'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Map Marker styles & Pulsing Rings */
+    .pulse-ring {
+      display: block;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(16, 185, 129, 0.4);
+      animation: pulseAnimation 2s infinite ease-out;
+      position: absolute;
+      top: -3px;
+      left: -3px;
+    }
+    @keyframes pulseAnimation {
+      0% { transform: scale(0.6); opacity: 1; }
+      100% { transform: scale(2.4); opacity: 0; }
+    }
+    .custom-div-icon {
+      background: transparent;
+      border: none;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    /* Toast styles */
+    #toast {
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+  </style>
+</head>
+
+<body class="h-full bg-slate-950 text-slate-100 flex flex-col font-sans overflow-hidden select-none">
+
+  <!-- TOP NAVIGATION BAR -->
+  <header class="h-16 border-b border-slate-800 bg-slate-900/90 backdrop-blur-md px-4 flex items-center justify-between z-30 shrink-0">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+        <i data-lucide="radar" class="w-6 h-6 text-slate-950 font-bold"></i>
+      </div>
+      <div>
+        <div class="flex items-center space-x-2">
+          <span class="font-display font-bold text-lg tracking-tight bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
+            PulseGrid GeoLive
+          </span>
+          <span class="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/30 tracking-wide">v2.4 EUR•AUS</span>
+        </div>
+        <p class="text-xs text-slate-400 hidden sm:block">Live Tracking & Mobile Vendor Dispatch Engine</p>
+      </div>
+    </div>
+
+    <!-- REGION PRESETS & ACTION BAR -->
+    <div class="flex items-center space-x-2 sm:space-x-3">
+      <!-- Quick Region Selector -->
+      <div class="relative inline-block text-left">
+        <select id="regionPreset" onchange="switchRegion(this.value)" class="bg-slate-800 border border-slate-700 text-xs text-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium">
+          <optgroup label="Europe (EUR)">
+            <option value="edinburgh">Edinburgh Fringe (UK)</option>
+            <option value="london">London West End (UK)</option>
+            <option value="berlin">Berlin Kreuzberg (DE)</option>
+            <option value="paris">Paris Marais (FR)</option>
+          </optgroup>
+          <optgroup label="Australia (AUS)" selected>
+            <option value="melbourne" selected>Melbourne CBD & St Kilda (AU)</option>
+            <option value="sydney">Sydney Harbour & Bondi (AU)</option>
+            <option value="goldcoast">Gold Coast Beachfront (AU)</option>
+            <option value="byronbay">Byron Bay Hinterland (AU)</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <!-- Live GPS My Location Button -->
+      <button onclick="locateUser()" title="Locate Me (HTML5 Geolocation)" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-emerald-400 transition-colors">
+        <i data-lucide="crosshair" class="w-4 h-4"></i>
+      </button>
+
+      <!-- New Event Request Button -->
+      <button onclick="openRequestModal()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-semibold text-xs transition shadow-md shadow-emerald-950/40">
+        <i data-lucide="plus-circle" class="w-4 h-4"></i>
+        <span class="hidden md:inline">Request Vendor/Event</span>
+      </button>
+
+      <!-- PRO MEMBERSHIP UPGRADE TRIGGER BUTTON -->
+      <button onclick="openProModal()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs tracking-wide transition shadow-lg shadow-amber-500/20">
+        <i data-lucide="sparkles" class="w-4 h-4"></i>
+        <span id="proBtnText">Upgrade Pro ($50/yr)</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN APP CONTAINER -->
+  <div class="flex-1 flex overflow-hidden relative">
+
+    <!-- COLLAPSIBLE SIDEBAR: RADAR FEED & CONTROLS -->
+    <aside id="sidebar" class="w-full sm:w-96 bg-slate-900 border-r border-slate-800 flex flex-col z-20 shrink-0 transition-all duration-300 absolute sm:relative h-full translate-x-0">
+      
+      <!-- Live Status Tickers & Filter Tabs -->
+      <div class="p-3 border-b border-slate-800 bg-slate-900/60 flex flex-col gap-2">
+        <div class="flex items-center justify-between text-xs">
+          <div class="flex items-center space-x-2">
+            <span class="relative flex h-2.5 w-2.5">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <span class="font-medium text-slate-300 tracking-wide">LIVE RADAR STREAM</span>
+          </div>
+          <span id="activeCountBadge" class="bg-slate-800 px-2 py-0.5 rounded text-[11px] text-emerald-400 font-mono">14 Units Active</span>
+        </div>
+
+        <!-- Filter Pill Chips -->
+        <div class="flex gap-1.5 overflow-x-auto pb-1 text-[11px] font-medium text-slate-400">
+          <button onclick="filterMarkers('all')" class="category-filter active px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700">All</button>
+          <button onclick="filterMarkers('food')" class="category-filter px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-slate-200 border border-slate-700">Food Trucks</button>
+          <button onclick="filterMarkers('performer')" class="category-filter px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-slate-200 border border-slate-700">Buskers/Fringe</button>
+          <button onclick="filterMarkers('sports')" class="category-filter px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-slate-200 border border-slate-700">Sports/Safety</button>
+          <button onclick="filterMarkers('request')" class="category-filter px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 hover:text-slate-200 border border-slate-700">Requests</button>
+        </div>
+      </div>
+
+      <!-- Pro Mode Quick Controls / Metrics Box -->
+      <div id="proFeaturesCard" class="m-3 p-3 rounded-xl bg-gradient-to-br from-slate-800/90 to-slate-900 border border-amber-500/20 shadow-md">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center space-x-1.5">
+            <i data-lucide="shield-check" class="w-4 h-4 text-amber-400"></i>
+            <span class="text-xs font-semibold text-amber-300">Pro Telemetry & Analytics</span>
+          </div>
+          <span id="proActiveTag" class="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded uppercase font-bold">Standard</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <button onclick="toggleHeatmap()" class="p-2 rounded bg-slate-950/70 border border-slate-700 hover:border-amber-400/50 flex items-center justify-between text-left group">
+            <span class="text-slate-300 text-[11px] group-hover:text-amber-300">Footfall Heatmap</span>
+            <span id="heatmapState" class="text-[10px] text-slate-500 font-mono">OFF</span>
+          </button>
+          <button onclick="toggleGeofenceAlert()" class="p-2 rounded bg-slate-950/70 border border-slate-700 hover:border-amber-400/50 flex items-center justify-between text-left group">
+            <span class="text-slate-300 text-[11px] group-hover:text-amber-300">3km Geofence Radar</span>
+            <span id="geofenceState" class="text-[10px] text-slate-500 font-mono">OFF</span>
+          </button>
+        </div>
+
+        <div class="mt-2.5 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-700/60 pt-2">
+          <span>Telemetry Export:</span>
+          <div class="space-x-1">
+            <button onclick="exportData('gpx')" class="hover:text-amber-400 font-mono font-medium underline">GPX</button>
+            <span>•</span>
+            <button onclick="exportData('geojson')" class="hover:text-amber-400 font-mono font-medium underline">GeoJSON</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feed List of Live Vendors & Requests -->
+      <div id="radarItemsFeed" class="flex-1 overflow-y-auto px-3 space-y-2 pb-6">
+        <!-- Rendered via JS -->
+      </div>
+
+      <!-- Sidebar footer / Quick Tip -->
+      <div class="p-2.5 bg-slate-950 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+        <span class="flex items-center gap-1.5">
+          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-emerald-400"></i> Click anywhere on map to drop a pin
+        </span>
+        <button onclick="toggleSidebar(false)" class="sm:hidden text-slate-400 hover:text-white">
+          <i data-lucide="chevrons-left" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </aside>
+
+    <!-- MOBILE SIDEBAR TOGGLE OVERLAY BUTTON -->
+    <button onclick="toggleSidebar()" class="sm:hidden absolute bottom-5 left-4 z-20 bg-slate-900/90 border border-slate-700 p-2.5 rounded-full shadow-2xl text-emerald-400">
+      <i data-lucide="menu" class="w-5 h-5"></i>
+    </button>
+
+    <!-- MAIN INTERACTIVE MAP CANVAS -->
+    <main class="flex-1 relative bg-slate-950">
+      <div id="map" class="w-full h-full z-10 bg-slate-950"></div>
+
+      <!-- Floating Map Layer & Info Controls -->
+      <div class="absolute top-4 right-4 z-20 flex flex-col space-y-2">
+        <div class="bg-slate-900/85 backdrop-blur-md p-1.5 rounded-lg border border-slate-700 shadow-xl flex flex-col gap-1">
+          <button onclick="setMapTile('dark')" title="CartoDB Dark Tile" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 font-semibold flex items-center gap-1.5">
+            <i data-lucide="moon" class="w-3.5 h-3.5 text-cyan-400"></i> Dark
+          </button>
+          <button onclick="setMapTile('voyager')" title="CartoDB Voyager (Streets)" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 font-semibold flex items-center gap-1.5">
+            <i data-lucide="sun" class="w-3.5 h-3.5 text-amber-400"></i> Streets
+          </button>
+          <button onclick="simulateGPSMove()" title="Simulate Real-Time Fleet Motion" class="p-2 rounded bg-slate-800 hover:bg-slate-700 text-xs text-emerald-400 font-semibold flex items-center gap-1.5">
+            <i data-lucide="play" class="w-3.5 h-3.5"></i> Stream
+          </button>
+        </div>
+      </div>
+
+      <!-- Floating Live ETA / Geofence Trigger Banner (Pro Demo) -->
+      <div id="geofenceBanner" class="hidden absolute top-4 left-4 z-20 bg-emerald-950/90 border border-emerald-500/50 backdrop-blur-md px-3.5 py-2.5 rounded-xl text-xs text-emerald-200 shadow-2xl max-w-sm flex items-start gap-2.5 animate-bounce">
+        <i data-lucide="bell-ring" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
+        <div>
+          <p class="font-bold text-white">Geofence Pro Alert: Truck Approaching</p>
+          <p class="text-[11px] text-emerald-300">"Melbourne Taco Caravan" entered your 2.5km radial zone. ETA: 7 mins.</p>
+        </div>
+        <button onclick="dismissBanner()" class="text-emerald-400 hover:text-white ml-2">×</button>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL 1: SUBMIT EVENT / MOBILE VENDOR REQUEST -->
+  <div id="requestModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative text-slate-200">
+      <button onclick="closeRequestModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="flex items-center space-x-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/40">
+          <i data-lucide="map-pin-plus" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="font-display font-bold text-lg text-white">Dispatch or Request Vendor</h3>
+          <p class="text-xs text-slate-400">Drop an on-demand crowd request or mobile vendor pitch</p>
+        </div>
+      </div>
+
+      <form id="vendorRequestForm" onsubmit="handleRequestSubmit(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Entity / Event Name</label>
+          <input type="text" id="reqName" required placeholder="e.g. St Kilda Beachfront Acoustic Set or Bio Coffee Cart" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Category</label>
+            <select id="reqCategory" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none">
+              <option value="food">Mobile Food / Coffee Truck</option>
+              <option value="performer">Busker / Street Performer</option>
+              <option value="sports">Athletic Support / Cheer Zone</option>
+              <option value="surf">Surf / Lifesaver Watch</option>
+              <option value="request">General Crowd Event Request</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Active Duration</label>
+            <select id="reqDuration" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none">
+              <option value="1">1 Hour Pop-up</option>
+              <option value="3">3 Hours (Standard)</option>
+              <option value="6">6 Hours (Half Day)</option>
+              <option value="24">Full Day (Pro)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Latitude</label>
+            <input type="number" step="any" id="reqLat" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Longitude</label>
+            <input type="number" step="any" id="reqLng" required class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Live Notes & Special Instructions</label>
+          <textarea id="reqDesc" rows="2" placeholder="e.g. 50+ spectators gathered, shade available, near Pier pavilion." class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"></textarea>
+        </div>
+
+        <div class="pt-2 flex items-center justify-end space-x-2">
+          <button type="button" onclick="closeRequestModal()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300">Cancel</button>
+          <button type="submit" class="px-5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20">Broadcast Pin to Radar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: $50/YEAR PRO MEMBERSHIP & BITCOIN CHECKOUT -->
+  <div id="proModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden overflow-y-auto">
+    <div class="bg-slate-900 border border-amber-500/40 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative text-slate-200 my-auto">
+      <button onclick="closeProModal()" class="absolute top-5 right-5 text-slate-400 hover:text-white">
+        <i data-lucide="x" class="w-6 h-6"></i>
+      </button>
+
+      <div class="text-center max-w-md mx-auto mb-6">
+        <div class="inline-flex p-3 rounded-2xl bg-gradient-to-tr from-amber-500/20 to-amber-300/10 border border-amber-500/30 text-amber-400 mb-2 shadow-inner">
+          <i data-lucide="crown" class="w-8 h-8"></i>
+        </div>
+        <h2 class="font-display font-bold text-2xl text-white">PulseGrid Pro Annual Pass</h2>
+        <p class="text-xs text-amber-200/80 mt-1">Direct Live Geofence Tracking, Heatmap Intelligence & On-Demand Dispatch</p>
+        <div class="mt-3 inline-flex items-baseline space-x-1.5">
+          <span class="text-3xl font-display font-extrabold text-white">$50.00</span>
+          <span class="text-xs text-slate-400 font-medium">/ year (~0.00075 BTC)</span>
+        </div>
+      </div>
+
+      <!-- Monetizable Feature Matrix (What's worth $50/yr) -->
+      <div class="grid sm:grid-cols-2 gap-3 mb-6 text-xs">
+        <div class="p-3 rounded-xl bg-slate-800/60 border border-slate-700/80 flex items-start space-x-2.5">
+          <i data-lucide="radio" class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5"></i>
+          <div>
+            <h4 class="font-bold text-slate-100">Radial Geofence Push Alerts</h4>
+            <p class="text-[11px] text-slate-400">Get instant desktop and mobile notifications the second your favorite food truck or busker crosses within 2km.</p>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-800/60 border border-slate-700/80 flex items-start space-x-2.5">
+          <i data-lucide="flame" class="w-4 h-4 text-amber-400 shrink-0 mt-0.5"></i>
+          <div>
+            <h4 class="font-bold text-slate-100">Live Footfall & Pitch Heatmaps</h4>
+            <p class="text-[11px] text-slate-400">Real-time crowd concentration maps across Europe & Australian festival districts to find high-traffic spots.</p>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-800/60 border border-slate-700/80 flex items-start space-x-2.5">
+          <i data-lucide="send" class="w-4 h-4 text-cyan-400 shrink-0 mt-0.5"></i>
+          <div>
+            <h4 class="font-bold text-slate-100">VIP On-Demand Dispatch</h4>
+            <p class="text-[11px] text-slate-400">Broadcast high-priority commercial booking calls directly to roving vendors with instant queue reservations.</p>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-800/60 border border-slate-700/80 flex items-start space-x-2.5">
+          <i data-lucide="download" class="w-4 h-4 text-purple-400 shrink-0 mt-0.5"></i>
+          <div>
+            <h4 class="font-bold text-slate-100">Telemetry History & GPX Export</h4>
+            <p class="text-[11px] text-slate-400">Export high-accuracy GPX and GeoJSON coordinates, speed logs, and spectator corridor metrics.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- BITCOIN PAYMENT PORTAL -->
+      <div class="p-4 rounded-2xl bg-slate-950 border border-amber-500/30 flex flex-col md:flex-row items-center gap-4">
+        
+        <!-- Generated Dynamic QR code -->
+        <div class="bg-white p-2.5 rounded-xl shrink-0 shadow-lg flex flex-col items-center">
+          <img id="btcQrCode" src="https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=bitcoin:1KAannFXUtEN1UooYvWjhHaT41z8iRuuKY?amount=0.00075" alt="Bitcoin QR Code" class="w-24 h-24 object-contain">
+          <span class="text-[9px] text-slate-800 font-mono mt-1 font-bold">SCAN WITH BTC WALLET</span>
+        </div>
+
+        <!-- Address & Copy Section -->
+        <div class="flex-1 w-full space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-amber-400 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1">
+              <i data-lucide="bitcoin" class="w-3.5 h-3.5"></i> Send $50 Annual Bitcoin Equivalent:
+            </span>
+            <span class="font-mono text-slate-400 font-semibold text-[11px]">0.00075 BTC</span>
+          </div>
+
+          <div class="flex items-center bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs">
+            <span id="btcAddressText" class="font-mono text-emerald-400 truncate flex-1 select-all">1KAannFXUtEN1UooYvWjhHaT41z8iRuuKY</span>
+            <button onclick="copyBtcAddress()" class="ml-2 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white flex items-center gap-1 shrink-0 font-medium border border-slate-600 transition">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              <span id="copyFeedback">Copy</span>
+            </button>
+          </div>
+
+          <div class="flex gap-2 pt-1">
+            <input type="text" id="txHashInput" placeholder="Paste Transaction ID or Hash (optional for instant unlock)" class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white flex-1 focus:outline-none focus:border-amber-400 font-mono">
+            <button onclick="activateProSimulated()" class="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs rounded-lg shadow-md whitespace-nowrap">
+              Verify & Unlock Pro
+            </button>
+          </div>
+          <p class="text-[10px] text-slate-500">Instant confirmation via mempool listener or manual TX hash review. 365-day access.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 pointer-events-none bg-slate-900 border border-slate-700 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3">
+    <div id="toastIcon" class="text-emerald-400"></div>
+    <div id="toastMessage" class="text-xs font-medium"></div>
+  </div>
+
+  <!-- APPLICATION JAVASCRIPT LOGIC -->
+  <script>
+    // --- STATE MANAGEMENT ---
+    let map;
+    let currentTileLayer;
+    let markersLayerGroup;
+    let heatmapLayer = null;
+    let isProActive = false;
+    let isHeatmapVisible = false;
+    let isGeofenceActive = false;
+    let currentFilter = 'all';
+    let userMarker = null;
+
+    // BTC Address constant
+    const BTC_WALLET = '1KAannFXUtEN1UooYvWjhHaT41z8iRuuKY';
+
+    // Region Presets (Europe & Australia)
+    const REGIONS = {
+      melbourne: {
+        name: "Melbourne, Australia",
+        coords: [-37.8136, 144.9631],
+        zoom: 13,
+        items: [
+          { id: 'm1', name: 'Flinders St Busker Pitch', category: 'performer', coords: [-37.8179, 144.9671], desc: 'Live violin & loop pedal. Set finishes in 35 mins.', status: 'Live Now', badge: 'High Footfall' },
+          { id: 'm2', name: 'St Kilda Pier Gelato & Coffee Van', category: 'food', coords: [-37.8675, 144.9721], desc: 'Parked along esplanade. Serving organic cold brew.', status: 'Open', badge: 'Popular' },
+          { id: 'm3', name: 'Yarra River Rowers Support Station', category: 'sports', coords: [-37.8228, 144.9812], desc: 'Hydration checkpoint and timing sensor marker.', status: 'Checkpoint', badge: 'Safety' },
+          { id: 'm4', name: 'Crowd Requested: Taco Truck Wanted', category: 'request', coords: [-37.8012, 144.9780], desc: 'Fitzroy block party gathered. 80+ people seeking vendor.', status: 'Active Call', badge: 'Requested' }
+        ]
+      },
+      sydney: {
+        name: "Sydney, Australia",
+        coords: [-33.8688, 151.2093],
+        zoom: 13,
+        items: [
+          { id: 's1', name: 'Circular Quay Didgeridoo Showcase', category: 'performer', coords: [-33.8612, 151.2108], desc: 'First Nations live performance near Wharf 2.', status: 'Live', badge: 'Verified' },
+          { id: 's2', name: 'Bondi Pavilion Acai Roamer', category: 'food', coords: [-33.8915, 151.2767], desc: 'Roving beachside mobile trailer.', status: 'Open', badge: 'Food' },
+          { id: 's3', name: 'North Bondi Surf Life Patrol', category: 'surf', coords: [-33.8885, 151.2825], desc: 'Water safety flag shifted 50m north. Rip current alert.', status: 'Watch', badge: 'Safety Alert' }
+        ]
+      },
+      goldcoast: {
+        name: "Gold Coast, Australia",
+        coords: [-28.0167, 153.4000],
+        zoom: 13,
+        items: [
+          { id: 'g1', name: 'Surfers Paradise Night Market Van', category: 'food', coords: [-28.0024, 153.4295], desc: 'Gourmet street food setup on beachfront path.', status: 'Live', badge: 'High Traffic' },
+          { id: 'g2', name: 'Burleigh Point Drone Patrol', category: 'surf', coords: [-28.0872, 153.4545], desc: 'Marine observation and swell telemetry broadcast.', status: 'Active', badge: 'Drone Stream' }
+        ]
+      },
+      byronbay: {
+        name: "Byron Bay, Australia",
+        coords: [-28.6474, 153.6120],
+        zoom: 14,
+        items: [
+          { id: 'b1', name: 'Main Beach Acoustic Session', category: 'performer', coords: [-28.6430, 153.6140], desc: 'Sunset acoustic collective.', status: 'Live', badge: 'Eco Vendor' },
+          { id: 'b2', name: 'Lighthouse Trail Water Station', category: 'sports', coords: [-28.6380, 153.6360], desc: 'Ultra runners self-serve hydration station.', status: 'Ready', badge: 'Sports' }
+        ]
+      },
+      edinburgh: {
+        name: "Edinburgh Fringe, UK",
+        coords: [55.9533, -3.1883],
+        zoom: 14,
+        items: [
+          { id: 'e1', name: 'Royal Mile Street Circus Pitch A', category: 'performer', coords: [55.9505, -3.1870], desc: 'Acrobatics & comedy troupe. Capacity crowd forming.', status: 'Live', badge: 'Fringe Official' },
+          { id: 'e2', name: 'Bristo Square Wood-Fired Pizza Trailer', category: 'food', coords: [55.9455, -3.1892], desc: 'Fresh Neapolitan slices for festival crowds.', status: 'Queue: 8 min', badge: 'Vendor' },
+          { id: 'e3', name: 'Grassmarket Acoustic Corner Wanted', category: 'request', coords: [55.9472, -3.1955], desc: 'Requesting Celtic folk busker for courtyard venue.', status: 'Wanted', badge: 'Bounty' }
+        ]
+      },
+      london: {
+        name: "London, UK",
+        coords: [51.5074, -0.1278],
+        zoom: 13,
+        items: [
+          { id: 'l1', name: 'Southbank Center Skate Jam Busker', category: 'performer', coords: [51.5065, -0.1165], desc: 'Live hip-hop beatbox & DJ mobile setup.', status: 'Live', badge: 'High Energy' },
+          { id: 'l2', name: 'Borough Market Street Food Dispatch', category: 'food', coords: [51.5055, -0.0909], desc: 'Artisan mobile espresso and sourdough buns.', status: 'Open', badge: 'Featured' }
+        ]
+      },
+      berlin: {
+        name: "Berlin, Germany",
+        coords: [52.5200, 13.4050],
+        zoom: 13,
+        items: [
+          { id: 'be1', name: 'Mauerpark Sunday Karaoke Radar', category: 'performer', coords: [52.5435, 13.4022], desc: 'Crowd circle amphitheatre gathering.', status: 'Crowded', badge: 'Weekend Special' },
+          { id: 'be2', name: 'Spree River Currywurst Rover', category: 'food', coords: [52.5015, 13.4440], desc: 'Electric mobile food cargo bike.', status: 'Moving', badge: 'Eco' }
+        ]
+      },
+      paris: {
+        name: "Paris, France",
+        coords: [48.8566, 2.3522],
+        zoom: 13,
+        items: [
+          { id: 'p1', name: 'Montmartre Steps Accordion Trio', category: 'performer', coords: [48.8867, 2.3431], desc: 'Classical Parisian chanson with violin support.', status: 'Live', badge: 'Heritage' },
+          { id: 'p2', name: 'Canal Saint-Martin Crepe Van', category: 'food', coords: [48.8710, 2.3650], desc: 'Buckwheat savory crepes & organic cider.', status: 'Open', badge: 'Popular' }
+        ]
+      }
+    };
+
+    // Master dataset initialized with Melbourne
+    let activeItems = [...REGIONS.melbourne.items];
+
+    // --- INITIALIZE MAP ---
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      initLeafletMap();
+      renderRadarFeed();
+      setupMapClickToDrop();
+    });
+
+    function initLeafletMap() {
+      // Default to Melbourne
+      const initial = REGIONS.melbourne;
+      map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false
+      }).setView(initial.coords, initial.zoom);
+
+      // Re-position zoom controls to bottom right
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+      // Set default dark tile
+      setMapTile('dark');
+
+      // Initialize marker group
+      markersLayerGroup = L.layerGroup().addTo(map);
+      refreshMapMarkers();
+    }
+
+    // Tile switcher between CartoDB Dark and Voyager
+    function setMapTile(type) {
+      if (currentTileLayer) {
+        map.removeLayer(currentTileLayer);
+      }
+      const tileUrl = type === 'dark' 
+        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+
+      currentTileLayer = L.tileLayer(tileUrl, {
+        maxZoom: 19,
+        subdomains: 'abcd'
+      }).addTo(map);
+    }
+
+    // Custom SVG Marker Generator
+    function createCustomMarkerIcon(category, isRequested = false) {
+      let color = '#10b981'; // emerald
+      let icon = 'compass';
+
+      if (category === 'food') { color = '#f59e0b'; icon = 'utensils'; }
+      else if (category === 'performer') { color = '#8b5cf6'; icon = 'music'; }
+      else if (category === 'sports') { color = '#06b6d4'; icon = 'activity'; }
+      else if (category === 'surf') { color = '#3b82f6'; icon = 'waves'; }
+      else if (category === 'request') { color = '#ec4899'; icon = 'megaphone'; }
+
+      const html = `
+        <div class="relative flex items-center justify-center">
+          <span class="pulse-ring" style="background: ${color}33;"></span>
+          <div style="background-color: ${color};" class="w-7 h-7 rounded-full flex items-center justify-center shadow-lg border-2 border-slate-900 text-slate-950 font-bold transform hover:scale-125 transition-transform">
+            <span style="font-size: 11px;">●</span>
+          </div>
+        </div>
+      `;
+
+      return L.divIcon({
+        className: 'custom-div-icon',
+        html: html,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+        popupAnchor: [0, -14]
+      });
+    }
+
+    // Refresh Markers on Map based on filter
+    function refreshMapMarkers() {
+      markersLayerGroup.clearLayers();
+
+      const filtered = activeItems.filter(item => {
+        if (currentFilter === 'all') return true;
+        return item.category === currentFilter;
+      });
+
+      filtered.forEach(item => {
+        const marker = L.marker(item.coords, {
+          icon: createCustomMarkerIcon(item.category)
+        });
+
+        const popupContent = `
+          <div class="bg-slate-900 text-slate-100 p-3 rounded-xl border border-slate-700 min-w-[210px] font-sans">
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+              <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded ${getCategoryBadgeStyle(item.category)}">${item.category}</span>
+              <span class="text-[11px] text-emerald-400 font-semibold font-mono">${item.status}</span>
+            </div>
+            <h4 class="font-bold text-sm text-white mb-1 leading-snug">${item.name}</h4>
+            <p class="text-xs text-slate-300 mb-2 leading-relaxed">${item.desc}</p>
+            <div class="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px]">
+              <span class="text-slate-400 font-mono">${item.coords[0].toFixed(3)}, ${item.coords[1].toFixed(3)}</span>
+              <button onclick="requestDirectDispatch('${item.id}')" class="px-2 py-1 rounded bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-[10px]">Dispatch Ping</button>
+            </div>
+          </div>
+        `;
+
+        marker.bindPopup(popupContent, {
+          className: 'custom-leaflet-popup',
+          closeButton: false
+        });
+
+        markersLayerGroup.addLayer(marker);
+      });
+
+      document.getElementById('activeCountBadge').innerText = `${filtered.length} Units Active`;
+      renderHeatmapData();
+    }
+
+    function getCategoryBadgeStyle(category) {
+      switch(category) {
+        case 'food': return 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
+        case 'performer': return 'bg-purple-500/20 text-purple-300 border border-purple-500/30';
+        case 'sports': return 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30';
+        case 'surf': return 'bg-blue-500/20 text-blue-300 border border-blue-500/30';
+        default: return 'bg-pink-500/20 text-pink-300 border border-pink-500/30';
+      }
+    }
+
+    // Switch Active City / Region Preset
+    function switchRegion(regionKey) {
+      const reg = REGIONS[regionKey];
+      if (!reg) return;
+
+      map.flyTo(reg.coords, reg.zoom, { duration: 1.5 });
+      activeItems = [...reg.items];
+      refreshMapMarkers();
+      renderRadarFeed();
+      showToast(`Switched region to ${reg.name}`, 'map-pin');
+    }
+
+    // Render Sidebar List
+    function renderRadarFeed() {
+      const container = document.getElementById('radarItemsFeed');
+      container.innerHTML = '';
+
+      const filtered = activeItems.filter(item => {
+        if (currentFilter === 'all') return true;
+        return item.category === currentFilter;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="p-6 text-center text-slate-500 text-xs">
+            No live units active in this filter.
+          </div>
+        `;
+        return;
+      }
+
+      filtered.forEach(item => {
+        const card = document.createElement('div');
+        card.className = "p-3 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition cursor-pointer group";
+        card.onclick = () => focusItemOnMap(item.coords);
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded ${getCategoryBadgeStyle(item.category)}">${item.category}</span>
+            <span class="text-[10px] text-emerald-400 font-mono font-medium">${item.status}</span>
+          </div>
+          <h5 class="text-xs font-semibold text-white group-hover:text-emerald-300 transition-colors">${item.name}</h5>
+          <p class="text-[11px] text-slate-400 line-clamp-2 mt-0.5">${item.desc}</p>
+          <div class="mt-2 flex items-center justify-between text-[10px] text-slate-500 pt-1.5 border-t border-slate-700/50">
+            <span class="font-mono">${item.coords[0].toFixed(3)}, ${item.coords[1].toFixed(3)}</span>
+            <span class="text-emerald-400 hover:underline">Focus Map →</span>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function focusItemOnMap(coords) {
+      map.flyTo(coords, 16, { duration: 1 });
+      if (window.innerWidth < 640) {
+        toggleSidebar(false);
+      }
+    }
+
+    // Filter toggle
+    function filterMarkers(cat) {
+      currentFilter = cat;
+      document.querySelectorAll('.category-filter').forEach(btn => {
+        btn.classList.remove('bg-emerald-500/20', 'text-emerald-300', 'border-emerald-500/40');
+      });
+      event.target.classList.add('bg-emerald-500/20', 'text-emerald-300', 'border-emerald-500/40');
+      refreshMapMarkers();
+      renderRadarFeed();
+    }
+
+    // Interactive Map Click drops coordinates into the Request Modal
+    function setupMapClickToDrop() {
+      map.on('click', (e) => {
+        document.getElementById('reqLat').value = e.latlng.lat.toFixed(6);
+        document.getElementById('reqLng').value = e.latlng.lng.toFixed(6);
+        openRequestModal();
+      });
+    }
+
+    // HTML5 Real Geolocation Hook
+    function locateUser() {
+      if (!navigator.geolocation) {
+        showToast('Geolocation is not supported by your browser.', 'alert-triangle');
+        return;
+      }
+
+      showToast('Acquiring real-time GPS position...', 'satellite');
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+
+          if (userMarker) {
+            map.removeLayer(userMarker);
+          }
+
+          userMarker = L.circleMarker([lat, lng], {
+            radius: 8,
+            fillColor: '#06b6d4',
+            color: '#ffffff',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.9
+          }).addTo(map).bindPopup('<b class="text-xs text-slate-900 font-bold">Your Live Position</b>').openPopup();
+
+          map.flyTo([lat, lng], 15);
+          showToast(`Located: ${lat.toFixed(3)}, ${lng.toFixed(3)}`, 'crosshair');
+        },
+        (err) => {
+          showToast('GPS access denied or unavailable. Using simulated location.', 'alert-circle');
+        },
+        { enableHighAccuracy: true, timeout: 6000 }
+      );
+    }
+
+    // Motion Simulation
+    function simulateGPSMove() {
+      activeItems.forEach(item => {
+        item.coords[0] += (Math.random() - 0.5) * 0.002;
+        item.coords[1] += (Math.random() - 0.5) * 0.002;
+      });
+      refreshMapMarkers();
+      renderRadarFeed();
+      showToast('Live telemetry fleet coordinates synchronized', 'activity');
+    }
+
+    // Direct in-app Booking / Dispatch trigger
+    function requestDirectDispatch(itemId) {
+      const item = activeItems.find(i => i.id === itemId);
+      showToast(`Priority dispatch sent to: ${item ? item.name : 'Vendor'}. ETA response queued.`, 'send');
+    }
+
+    // --- PRO & MONETIZATION SYSTEM ---
+    function openProModal() {
+      document.getElementById('proModal').classList.remove('hidden');
+    }
+    function closeProModal() {
+      document.getElementById('proModal').classList.add('hidden');
+    }
+
+    function copyBtcAddress() {
+      const btc = BTC_WALLET;
+      
+      // Fallback-safe clipboard copy
+      const tempInput = document.createElement('input');
+      tempInput.value = btc;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempInput);
+
+      const feedback = document.getElementById('copyFeedback');
+      feedback.innerText = 'Copied!';
+      setTimeout(() => { feedback.innerText = 'Copy'; }, 2500);
+      showToast('Bitcoin address copied to clipboard!', 'check-circle');
+    }
+
+    function activateProSimulated() {
+      isProActive = true;
+      document.getElementById('proActiveTag').innerText = 'PRO UNLOCKED (365d)';
+      document.getElementById('proActiveTag').className = 'text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded uppercase font-bold border border-emerald-500/40';
+      document.getElementById('proBtnText').innerText = 'Pro Active';
+      
+      closeProModal();
+      showToast('Pro Pass Verified! Geofence alerts and heatmaps unlocked.', 'crown');
+      toggleHeatmap(true);
+      toggleGeofenceAlert(true);
+    }
+
+    function toggleHeatmap(forceState = null) {
+      if (!isProActive) {
+        openProModal();
+        return;
+      }
+
+      isHeatmapVisible = forceState !== null ? forceState : !isHeatmapVisible;
+      document.getElementById('heatmapState').innerText = isHeatmapVisible ? 'ON' : 'OFF';
+      document.getElementById('heatmapState').className = isHeatmapVisible ? 'text-[10px] text-amber-400 font-mono font-bold' : 'text-[10px] text-slate-500 font-mono';
+
+      renderHeatmapData();
+      showToast(`Footfall Heatmap: ${isHeatmapVisible ? 'Active' : 'Deactivated'}`, 'flame');
+    }
+
+    function renderHeatmapData() {
+      if (!isHeatmapVisible) {
+        if (heatmapLayer) {
+          map.removeLayer(heatmapLayer);
+          heatmapLayer = null;
+        }
+        return;
+      }
+
+      // Generate weighted density heat points around current items
+      const heatPoints = [];
+      activeItems.forEach(item => {
+        heatPoints.push([item.coords[0], item.coords[1], 0.9]);
+        // add auxiliary density spots around urban core
+        heatPoints.push([item.coords[0] + 0.001, item.coords[1] + 0.001, 0.5]);
+        heatPoints.push([item.coords[0] - 0.001, item.coords[1] - 0.001, 0.4]);
+      });
+
+      if (heatmapLayer) {
+        map.removeLayer(heatmapLayer);
+      }
+
+      if (window.L && L.heatLayer) {
+        heatmapLayer = L.heatLayer(heatPoints, {
+          radius: 35,
+          blur: 20,
+          maxZoom: 16,
+          gradient: { 0.2: '#06b6d4', 0.5: '#10b981', 0.8: '#f59e0b', 1.0: '#ef4444' }
+        }).addTo(map);
+      }
+    }
+
+    function toggleGeofenceAlert(forceState = null) {
+      if (!isProActive) {
+        openProModal();
+        return;
+      }
+
+      isGeofenceActive = forceState !== null ? forceState : !isGeofenceActive;
+      document.getElementById('geofenceState').innerText = isGeofenceActive ? 'ON' : 'OFF';
+      document.getElementById('geofenceState').className = isGeofenceActive ? 'text-[10px] text-emerald-400 font-mono font-bold' : 'text-[10px] text-slate-500 font-mono';
+
+      const banner = document.getElementById('geofenceBanner');
+      if (isGeofenceActive) {
+        banner.classList.remove('hidden');
+      } else {
+        banner.classList.add('hidden');
+      }
+    }
+
+    function dismissBanner() {
+      document.getElementById('geofenceBanner').classList.add('hidden');
+    }
+
+    // Telemetry Export in GPX / GeoJSON (Pro Feature)
+    function exportData(format) {
+      if (!isProActive) {
+        openProModal();
+        return;
+      }
+
+      let dataStr = '';
+      let filename = `pulsegrid_telemetry_${Date.now()}`;
+
+      if (format === 'geojson') {
+        const geojson = {
+          type: "FeatureCollection",
+          features: activeItems.map(item => ({
+            type: "Feature",
+            properties: { name: item.name, category: item.category, desc: item.desc, status: item.status },
+            geometry: { type: "Point", coordinates: [item.coords[1], item.coords[0]] }
+          }))
+        };
+        dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(geojson, null, 2));
+        filename += '.geojson';
+      } else {
+        // Basic GPX format
+        let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="PulseGrid">\n`;
+        activeItems.forEach(item => {
+          gpx += `  <wpt lat="${item.coords[0]}" lon="${item.coords[1]}">\n    <name>${item.name}</name>\n    <desc>${item.desc}</desc>\n  </wpt>\n`;
+        });
+        gpx += `</gpx>`;
+        dataStr = "data:text/xml;charset=utf-8," + encodeURIComponent(gpx);
+        filename += '.gpx';
+      }
+
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", filename);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+
+      showToast(`Exported ${format.toUpperCase()} telemetry successfully`, 'download');
+    }
+
+    // --- EVENT REQUEST WORKFLOW ---
+    function openRequestModal() {
+      if (!document.getElementById('reqLat').value) {
+        const center = map.getCenter();
+        document.getElementById('reqLat').value = center.lat.toFixed(6);
+        document.getElementById('reqLng').value = center.lng.toFixed(6);
+      }
+      document.getElementById('requestModal').classList.remove('hidden');
+    }
+
+    function closeRequestModal() {
+      document.getElementById('requestModal').classList.add('hidden');
+    }
+
+    function handleRequestSubmit(e) {
+      e.preventDefault();
+      const name = document.getElementById('reqName').value;
+      const category = document.getElementById('reqCategory').value;
+      const lat = parseFloat(document.getElementById('reqLat').value);
+      const lng = parseFloat(document.getElementById('reqLng').value);
+      const desc = document.getElementById('reqDesc').value || 'User submitted live event request on PulseGrid.';
+
+      const newItem = {
+        id: 'req_' + Date.now(),
+        name: name,
+        category: category,
+        coords: [lat, lng],
+        desc: desc,
+        status: 'Active Request',
+        badge: 'Priority'
+      };
+
+      activeItems.unshift(newItem);
+      refreshMapMarkers();
+      renderRadarFeed();
+      closeRequestModal();
+
+      map.flyTo([lat, lng], 15);
+      showToast(`Broadcasted pin: "${name}" to radar!`, 'radio');
+      document.getElementById('vendorRequestForm').reset();
+    }
+
+    // Sidebar drawer toggle on mobile
+    function toggleSidebar(forceState = null) {
+      const sidebar = document.getElementById('sidebar');
+      if (forceState !== null) {
+        sidebar.classList.toggle('-translate-x-full', !forceState);
+      } else {
+        sidebar.classList.toggle('-translate-x-full');
+      }
+    }
+
+    // Sleek Toast notification helper
+    function showToast(message, iconName = 'check') {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMessage');
+      const toastIcon = document.getElementById('toastIcon');
+
+      toastMsg.innerText = message;
+      toastIcon.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4"></i>`;
+      lucide.createIcons();
+
+      toast.classList.remove('opacity-0', 'translate-y-20', 'pointer-events-none');
+      toast.classList.add('opacity-100', 'translate-y-0');
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-20', 'pointer-events-none');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 3500);
+    }
+  </script>
+</body>
+</html>
